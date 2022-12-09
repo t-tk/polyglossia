@@ -1,5 +1,5 @@
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{polyglossia}[2022/10/26 v1.58
+\ProvidesPackage{polyglossia}[2022/11/29 v1.59
   Modern multilingual typesetting with XeLaTeX and LuaLaTeX]
 \RequirePackage{etoolbox}
 \RequirePackage{makecmds}
@@ -152,6 +152,12 @@
   The~ language~ #1~ is~ not~ loaded.~ You~ should~ load~ it.
 }
 \msg_redirect_name:nnn { polyglossia } { languagenotloaded } { critical }
+
+\msg_new:nnn { polyglossia } { languagenolongerloaded }
+{
+  The~ language~ #1~ is~ no~ longer~ loaded.~ Please~ rerun~ LaTeX.
+}
+\msg_redirect_name:nnn { polyglossia } { languagenolongerloaded } { warning }
 
 % 
 
@@ -911,25 +917,41 @@
 
 % add fontfeature Script=#2 to scripttag #1
 % do nothing if #1 or #2 is empty
-\cs_new:Nn \polyglossia@addfontfeature@script:nn {
-  \bool_if:nTF{\tl_if_empty_p:n{#1} || \tl_if_empty_p:n{#2}}
+\cs_new:Nn \polyglossia@addfontfeature@script:nnn {
+  \bool_if:nTF{\tl_if_empty_p:n{#2} || \tl_if_empty_p:n{#3}}
   {
     % maybe an error ?
     \xpg@warning{Asking~ to~ add~ empty~ feature~to~ latin~ font
-                 (Script="#2"~ to~ scripttag~ "#1")}
+                 (Script="#3"~ to~ scripttag~ "#2")}
   }
   {
-    \fontspec_if_script:nTF{#1}
-       {\addfontfeature{Script=#2}}
-       {\xpg@error{
-          The~ current~ latin ~ font~ \l_fontspec_family_tl\space does~ not~ contain~ the~"#2"~ script!\MessageBreak
-          Please~ define~\csname\tl_if_empty:nF{#2}{\str_lowercase:n#2}font\endcsname~
+    \fontspec_if_script:nTF{#2}
+       {\addfontfeature{Script=#3}}
+       {
+        \tl_set:Nn \l_ffamily_tl {}
+        \tl_set:Nn \l_ffamilysh_tl { #1 }
+        \str_if_eq:nnT { #1 } { rm }
+           {
+             \tl_set:Nn \l_ffamily_tl { roman }
+             \tl_set:Nn \l_ffamilysh_tl {}
+           }
+        \str_if_eq:nnT { #1 } { sf }
+           {
+             \tl_set:Nn \l_ffamily_tl { sans~ serif }
+           }
+        \str_if_eq:nnT { #1 } { tt }
+           {
+             \tl_set:Nn \l_ffamily_tl { monospace }
+           }
+        \xpg@error{
+          The~ current~ latin ~ \l_ffamily_tl\space font~ does~ not~ contain~ the~"#3"~ script!\MessageBreak
+          Please~ define~\csname\tl_if_empty:nF{#3}{\str_lowercase:n#3}font\l_ffamilysh_tl\endcsname~
           with~ \string\newfontfamily\space command
           }
         }
   }
 }
-\cs_generate_variant:Nn  \polyglossia@addfontfeature@script:nn { on , no, oo , Vn, nV, VV , xn, nx, xx}
+\cs_generate_variant:Nn  \polyglossia@addfontfeature@script:nnn { non , nno, noo , nVn, nnV, nVV , nxn, nnx, nxx}
 
 \def\xpg@fontsetup@latin#1{%
   \begingroup
@@ -974,7 +996,8 @@
            }
        }
        \iftoggle{#1@use@script@font}{}{%
-           \polyglossia@addfontfeature@script:xx{\prop_item:Nn{\polyglossia@langsetup}{#1/scripttag}}
+           \polyglossia@addfontfeature@script:nxx{rm}
+                                                 {\prop_item:Nn{\polyglossia@langsetup}{#1/scripttag}}
                                                  {\prop_item:Nn{\polyglossia@langsetup}{#1/script}}
        }%
        \polyglossia@addfontfeature@language:xx{\prop_item:Nn{\polyglossia@langsetup}{#1/langtag}}
@@ -997,7 +1020,8 @@
            }
        }
        \iftoggle{#1@use@script@fontsf}{}{%
-           \polyglossia@addfontfeature@script:xx{\prop_item:Nn{\polyglossia@langsetup}{#1/scripttag}}
+           \polyglossia@addfontfeature@script:nxx{sf}
+                                                 {\prop_item:Nn{\polyglossia@langsetup}{#1/scripttag}}
                                                  {\prop_item:Nn{\polyglossia@langsetup}{#1/script}}
        }%
        \polyglossia@addfontfeature@language:xx{\prop_item:Nn{\polyglossia@langsetup}{#1/langtag}}
@@ -1020,7 +1044,8 @@
            }
        }
        \iftoggle{#1@use@script@fonttt}{}{%
-           \polyglossia@addfontfeature@script:xx{\prop_item:Nn{\polyglossia@langsetup}{#1/scripttag}}
+           \polyglossia@addfontfeature@script:nxx{tt}
+                                                 {\prop_item:Nn{\polyglossia@langsetup}{#1/scripttag}}
                                                  {\prop_item:Nn{\polyglossia@langsetup}{#1/script}}
        }%
        \polyglossia@addfontfeature@language:xx{\prop_item:Nn{\polyglossia@langsetup}{#1/langtag}}
@@ -1947,26 +1972,23 @@
   \xpg@hook@setlanguage
   \let\emp@langname\@undefined}
 
+\newif\ifxpglanginaux\xpglanginauxfalse
+
 \DeclareDocumentCommand \selectlanguage {s O{} m}
 {
   \tl_if_blank:eTF {\xpg_alias_base_lang:n{#3}}
   {
-    \msg_show:nnn { polyglossia } { languagenotloaded } {#3}
+    \ifxpglanginaux
+      \msg_show:nnn { polyglossia } { languagenolongerloaded } {#3}
+    \else
+      \msg_show:nnn { polyglossia } { languagenotloaded } {#3}
+    \fi
   }
   {
     \polyglossia@select@language:nee {#1}
       {\xpg_alias_add_to_option_i:nn{#3}{#2}}
       {\xpg_alias_base_lang:n{#3}}
   }
-}
-
-\DeclareDocumentCommand \xselectlanguage {s O{} m}
-{
-  \iflanguageloaded{#3}{%
-     \polyglossia@select@language:nee {#1}
-        {\xpg_alias_add_to_option_i:nn{#3}{#2}}
-        {\xpg_alias_base_lang:n{#3}}
-  }{\xpg@warning{Language~ #3~ no~ longer~ loaded.~ Please~ rerun~ LaTeX!}}%
 }
 
 \cs_new:Nn \polyglossia@select@language:nnn
@@ -2198,13 +2220,15 @@
 \newcommand*{\xpg@set@language@only@aux}[2][]{%
     % Write to the aux
    \if@filesw%
+      \protected@write\@auxout{}{\protect\xpglanginauxtrue}%
       \ifx#1\\\\%
-          \protected@write\@auxout{}{\protect\xselectlanguage*{#2}}%
-          \addtocontents{toc}{\protect\xselectlanguage*{#2}}%
+          \protected@write\@auxout{}{\protect\selectlanguage*{#2}}%
+          \addtocontents{toc}{\protect\selectlanguage*{#2}}%
        \else
-          \protected@write\@auxout{}{\protect\xselectlanguage*[#1]{#2}}%
-          \addtocontents{toc}{\protect\xselectlanguage*[#1]{#2}}%
+          \protected@write\@auxout{}{\protect\selectlanguage*[#1]{#2}}%
+          \addtocontents{toc}{\protect\selectlanguage*[#1]{#2}}%
        \fi
+       \protected@write\@auxout{}{\protect\xpglanginauxfalse}%
    \fi
 }
 
